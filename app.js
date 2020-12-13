@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const session = require("express-session");
 const MongoDBStore = require("connect-mongodb-session")(session);
+const csrf = require("csurf");
 // const cookieParser = require("cookie-parser"); // use for client-side
 
 const errorController = require("./controllers/error");
@@ -18,6 +19,8 @@ const store = new MongoDBStore({
 	uri: MONGODB_URI,
 	collection: "sessions",
 });
+
+const csrfProtection = csrf();
 
 app.set("view engine", "ejs");
 app.set("views", "views");
@@ -55,13 +58,25 @@ app.use(
 	})
 );
 
+app.use(csrfProtection);
+
 app.use((req, res, next) => {
-	User.findById("5fcb63b6629c641ee43933f8")
+	if (!req.session.user) {
+		return next();
+	}
+
+	User.findById(req.session.user._id)
 		.then((user) => {
 			req.user = user;
 			next();
 		})
 		.catch((err) => console.log(err));
+});
+
+app.use((req, res, next) => {
+	res.locals.isAuthenticated = req.session.isLoggedIn;
+	res.locals.csrfToken = req.csrfToken();
+	next();
 });
 
 app.use("/admin", adminRoutes);
@@ -77,21 +92,6 @@ mongoose
 		useCreateIndex: true,
 	})
 	.then((result) => {
-		User.findOne()
-			.then((user) => {
-				if (!user) {
-					const user = new User({
-						name: "Thang",
-						email: "thang@gmail.com",
-						cart: {
-							items: [],
-						},
-					});
-
-					user.save();
-				}
-			})
-			.catch((error) => console.log(error));
 		app.listen(3000);
 	})
 	.catch((err) => console.log(err));
