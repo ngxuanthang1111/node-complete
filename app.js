@@ -9,11 +9,18 @@ const flash = require("connect-flash");
 const dotENV = require('dotenv')
 // const cookieParser = require("cookie-parser"); // use for client-side
 
+// TODO: Routes
+const adminRoutes = require("./routes/admin");
+const shopRoutes = require("./routes/shop");
+const authRoutes = require("./routes/auth");
+
+// TODO: Controller
 const errorController = require("./controllers/error");
 const User = require("./models/user");
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
+// TODO: Initial MongoDB contain session
 const app = express();
 const store = new MongoDBStore({
 	uri: MONGODB_URI,
@@ -22,12 +29,9 @@ const store = new MongoDBStore({
 
 const csrfProtection = csrf();
 
+// TODO: Assign path view ejs
 app.set("view engine", "ejs");
 app.set("views", "views");
-
-const adminRoutes = require("./routes/admin");
-const shopRoutes = require("./routes/shop");
-const authRoutes = require("./routes/auth");
 
 // app.use(cookieParser());
 // // set a cookie
