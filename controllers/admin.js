@@ -1,11 +1,11 @@
 const Product = require("../models/product");
+const mongoose = require("mongoose");
 
 exports.getAddProduct = (req, res, next) => {
 	res.render("admin/edit-product", {
 		pageTitle: "Add Product",
 		path: "/admin/add-product",
 		editing: false,
-		isAuthenticated: req.session.isLoggedIn,
 	});
 };
 
@@ -24,7 +24,6 @@ exports.postAddProduct = (req, res, next) => {
 	product
 		.save()
 		.then((result) => {
-			// console.log(result);
 			console.log("Created Product");
 			res.redirect("/admin/products");
 		})
@@ -49,7 +48,6 @@ exports.getEditProduct = (req, res, next) => {
 				path: "/admin/edit-product",
 				editing: editMode,
 				product: product,
-				isAuthenticated: req.session.isLoggedIn,
 			});
 		})
 		.catch((err) => console.log(err));
@@ -61,24 +59,31 @@ exports.postEditProduct = (req, res, next) => {
 	const updatedPrice = req.body.price;
 	const updatedImageUrl = req.body.imageUrl;
 	const updatedDesc = req.body.description;
-
 	Product.findById(prodId)
 		.then((product) => {
+			console.log("edit product: ", product);
+			console.log("compare user id: ", product.userId !== req.user.id);
+
+			if (product.userId.toString() !== req.user._id.toString()) {
+				return res.redirect("/");
+			}
+
 			product.title = updatedTitle;
 			product.price = updatedPrice;
 			product.description = updatedDesc;
 			product.imageUrl = updatedImageUrl;
-			return product.save();
+
+			return product.save().then((result) => {
+				console.log("UPDATED PRODUCT!");
+				res.redirect("/admin/products");
+			});
 		})
-		.then((result) => {
-			console.log("UPDATED PRODUCT!");
-			res.redirect("/admin/products");
-		})
+
 		.catch((err) => console.log(err));
 };
 
 exports.getProducts = (req, res, next) => {
-	Product.find()
+	Product.find({ userId: req.user._id })
 		// .select('title price -_id')
 		// .populate('userId', 'name')
 		.then((products) => {
@@ -86,7 +91,6 @@ exports.getProducts = (req, res, next) => {
 				prods: products,
 				pageTitle: "Admin Products",
 				path: "/admin/products",
-				isAuthenticated: req.session.isLoggedIn,
 			});
 		})
 		.catch((err) => console.log(err));
@@ -94,7 +98,7 @@ exports.getProducts = (req, res, next) => {
 
 exports.postDeleteProduct = (req, res, next) => {
 	const prodId = req.body.productId;
-	Product.findByIdAndRemove(prodId)
+	Product.deleteOne({ _id: prodId, userId: req.user._id })
 		.then(() => {
 			console.log("DESTROYED PRODUCT");
 			res.redirect("/admin/products");
