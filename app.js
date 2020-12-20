@@ -6,8 +6,8 @@ const session = require("express-session");
 const MongoDBStore = require("connect-mongodb-session")(session);
 const csrf = require("csurf");
 const flash = require("connect-flash");
-const dotENV = require('dotenv')
-// const cookieParser = require("cookie-parser"); // use for client-side
+const dotENV = require("dotenv");
+const multer = require("multer");
 
 // TODO: Routes
 const adminRoutes = require("./routes/admin");
@@ -29,30 +29,42 @@ const store = new MongoDBStore({
 
 const csrfProtection = csrf();
 
+const fileStorage = multer.diskStorage({
+	destination: (req, file, cb) => {
+		cb(null, "images");
+	},
+	filename: (req, file, cb) => {
+		cb(null, new Date().toISOString() + "-" + file.originalname);
+	},
+});
+
+const fileFilter = (req, file, cb) => {
+	if (
+		file.mimetype === "image/png" ||
+		file.mimetype === "image/jpg" ||
+		file.mimetype === "image/jpeg"
+	) {
+		cb(null, true);
+	} else {
+		cb(null, false);
+	}
+};
+
 // TODO: Assign path view ejs
 app.set("view engine", "ejs");
 app.set("views", "views");
 
-// app.use(cookieParser());
-// // set a cookie
-// app.use(function (req, res, next) {
-// 	// check if client sent cookie
-// 	var cookie = req.cookies.cookieName;
-// 	if (cookie === undefined) {
-// 		// no: set a new cookie
-// 		var randomNumber = Math.random().toString();
-// 		randomNumber = randomNumber.substring(2, randomNumber.length);
-// 		res.cookie("cookieName", randomNumber, { maxAge: 900000, httpOnly: true });
-// 		console.log("cookie created successfully");
-// 	} else {
-// 		// yes, cookie was already present
-// 		console.log("cookie exists", cookie);
-// 	}
-// 	next(); // <-- important!
-// });
-
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/images", express.static(path.join(__dirname, "images")));
+
+app.use(
+	multer({
+		storage: fileStorage,
+		fileFilter: fileFilter,
+	}).single("image")
+);
+
 app.use(
 	session({
 		secret: "my secret",
@@ -66,29 +78,44 @@ app.use(csrfProtection);
 app.use(flash());
 
 app.use((req, res, next) => {
+	res.locals.isAuthenticated = req.session.isLoggedIn;
+	res.locals.csrfToken = req.csrfToken();
+	next();
+});
+
+app.use((req, res, next) => {
 	if (!req.session.user) {
 		return next();
 	}
 
 	User.findById(req.session.user._id)
 		.then((user) => {
+			if (!user) {
+				return next();
+			}
 			req.user = user;
 			next();
 		})
-		.catch((err) => console.log(err));
-});
-
-app.use((req, res, next) => {
-	res.locals.isAuthenticated = req.session.isLoggedIn;
-	res.locals.csrfToken = req.csrfToken();
-	next();
+		.catch((err) => {
+			next(new Error(err));
+		});
 });
 
 app.use("/admin", adminRoutes);
 app.use(shopRoutes);
 app.use(authRoutes);
 
+app.get("/500", errorController.get500);
 app.use(errorController.get404);
+
+app.use((error, req, res, next) => {
+	res.status(500).redirect("/500");
+	// res.status(500).render("500", {
+	// 	pageTitle: "Error!",
+	// 	path: "/500",
+	// 	isAuthenticated: req.session.isLoggedIn,
+	// });
+});
 
 mongoose
 	.connect(MONGODB_URI, {
@@ -97,7 +124,7 @@ mongoose
 		useCreateIndex: true,
 	})
 	.then((result) => {
-		dotENV.config()
+		dotENV.config();
 		app.listen(3000);
 	})
 	.catch((err) => console.log(err));
